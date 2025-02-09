@@ -1,10 +1,9 @@
 import os
 import logging
-import requests
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request
 from dotenv import load_dotenv
-import markdown2
 import google.generativeai as genai
+from firecrawl import FirecrawlApp
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -19,6 +18,9 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default-secret-key")
 # Configure Gemini API
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 model = genai.GenerativeModel('gemini-pro')
+
+# Configure Firecrawl
+firecrawl = FirecrawlApp(api_key=os.getenv('FIRECRAWL_API_KEY'))
 
 @app.route('/')
 def index():
@@ -38,23 +40,17 @@ def generate_story():
 
         logger.debug(f"Attempting to scrape URL: {parkrun_url}")
 
-        # Call Firecrawl API to scrape the page
-        firecrawl_url = "https://firecrawl.dev/api/scrape"
-        headers = {
-            'Authorization': f'Bearer {os.getenv("FIRECRAWL_API_KEY")}',
-            'Content-Type': 'application/json'
-        }
-        payload = {
-            'url': parkrun_url,
-            'selector': 'body'  # Adding selector to get the full content
-        }
+        # Use Firecrawl Python client to scrape the page
+        response = firecrawl.scrape_url(
+            url=parkrun_url,
+            params={
+                'formats': ['markdown']
+            }
+        )
 
-        logger.debug(f"Making request to Firecrawl API: {firecrawl_url}")
-        response = requests.post(firecrawl_url, headers=headers, json=payload)
-
-        if response.status_code != 200:
-            logger.error(f"Firecrawl API error: Status {response.status_code}, Response: {response.text}")
-            return render_template('index.html', error=f"Error fetching runner data: {response.text}"), 500
+        if not response or not response.text:
+            logger.error("No data received from Firecrawl")
+            return render_template('index.html', error="Could not fetch runner data"), 500
 
         markdown_data = response.text
         logger.debug(f"Received markdown data: {markdown_data[:200]}...")
@@ -70,12 +66,9 @@ def generate_story():
 
         return render_template('story.html', story=story)
 
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching data from Firecrawl: {str(e)}")
-        return render_template('index.html', error=f"Error fetching runner data: {str(e)}"), 500
     except Exception as e:
-        logger.error(f"Error generating story: {str(e)}")
-        return render_template('index.html', error=f"Error generating story: {str(e)}"), 500
+        logger.error(f"Error: {str(e)}")
+        return render_template('index.html', error=f"Error: {str(e)}"), 500
 
 @app.errorhandler(404)
 def not_found_error(error):
