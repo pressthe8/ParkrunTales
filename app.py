@@ -48,11 +48,13 @@ def generate_story():
             }
         )
 
-        if not response or not response.text:
-            logger.error("No data received from Firecrawl")
+        logger.debug(f"Firecrawl response: {response}")
+
+        if not response or not isinstance(response, dict) or 'markdown' not in response:
+            logger.error("Invalid response format from Firecrawl")
             return render_template('index.html', error="Could not fetch runner data"), 500
 
-        markdown_data = response.text
+        markdown_data = response['markdown']
         logger.debug(f"Received markdown data: {markdown_data[:200]}...")
 
         # Generate story prompt
