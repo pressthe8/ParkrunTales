@@ -57,6 +57,11 @@ def generate_story():
         markdown_data = response['markdown']
         logger.debug(f"Received markdown data: {markdown_data[:200]}...")
 
+        # Check if the response indicates a "page not found" error
+        if "couldn't find the page you were looking for" in markdown_data.lower():
+            error_message = f"'{athlete_id}' does not seem to be a valid Athlete ID, please try again"
+            return render_template('index.html', error=error_message), 404
+
         # Generate story prompt
         prompt = f"""Using the following Markdown data, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun journey of the runner. The story should be in the third person, include a notable news event from the week of their first parkrun, highlight key stats (total runs, best time), and mention a few locations they have visited. Add some playful running-related puns but keep it engaging and concise.
 
