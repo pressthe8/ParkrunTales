@@ -127,22 +127,21 @@ def generate_story():
             return render_template('index.html', error=error_message), 404
 
         # Generate story prompt
-        prompt = f"""Using the following Markdown data, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
+        prompt = f"""Using the Markdown data that follows, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
 
+First: Locate a popular news story from the date they first attended a Parkrun event. This should be something light related to sports or entertainment.
 
-The story should be in the third person, and include:
+Then craft a story in the third person to include:
 
+1. **Introduction:** Start with a hook that grabs the reader's attention.  This should include a humerous link to the news item identified around the date of their first parkrun.
 
-1) Introduction including a notable news item from around the date of their first parkrun. Something light related to sports or entertainment.
+2. **The Early Days & Evolving Affinities:** Describe their initial parkrun experiences. Were they hooked immediately, or were there long gaps betwwen events? Highlight key stats (total runs, best time so far), and mention a few locations they have visited.  Do they have a favorite course, or did their preferences change over time?
 
+3. **Milestones and Memories:**  Mention if they have achieved any milestone clubs (25, 50, 100, 250, 500, 1000).  Weave these milestones into the narrative.  Instead of just stating "They reached their 50th parkrun," be creative and describe the occasion. Include anecdotes about highs and lows, particularly when they hit PBs.
 
-2) highlight key stats (total runs, best time), and mention a few locations they have visited, or particular affinities to events that changed over time.
+4. **Celebration and Conclusion:**  Conclude by celebrating their achievements, regardless of their best or average times.  Focus on the journey, the community, and the personal satisfaction of participating.  Avoid cheesy clichés, but acknowledge their dedication.
 
-
-3) Mention is they have achieved any milestones clubs (25, 50, 100, 250, 500, 1000)
-
-
-4) Be sure to celebrate their achievements regardless of best / average but don't be too cheesy about it. Also mention highs and lows through their event history, particularly when they hit PBs 
+5. **Markdown Data Integration:**  Emphasize that the story should seamlessly integrate the provided Markdown data.  The generated narrative should feel natural and not like a list of facts.
 
         {markdown_data}"""
 
