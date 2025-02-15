@@ -49,17 +49,29 @@ def index():
 
 @app.route('/story/<url_hash>')
 def view_story(url_hash):
-    # Query the Realtime Database for the story
-    stories = ref.order_by_child('url_hash').equal_to(url_hash).get()
+    try:
+        # Get all stories and filter by url_hash
+        stories = ref.get()
+        if not stories:
+            logger.debug("No stories found in database")
+            return render_template('index.html', error="Story not found"), 404
 
-    if not stories:
-        return render_template('index.html', error="Story not found"), 404
+        # Find the story with matching url_hash
+        matching_story = None
+        for story_id, story_data in stories.items():
+            if story_data.get('url_hash') == url_hash:
+                matching_story = story_data
+                break
 
-    # Get the first (and should be only) story with this hash
-    story_id = list(stories.keys())[0]
-    story_data = stories[story_id]
+        if not matching_story:
+            logger.debug(f"No story found with url_hash: {url_hash}")
+            return render_template('index.html', error="Story not found"), 404
 
-    return render_template('story.html', story=story_data['content'], url_hash=url_hash)
+        return render_template('story.html', story=matching_story['content'], url_hash=url_hash)
+
+    except Exception as e:
+        logger.error(f"Error retrieving story: {str(e)}")
+        return render_template('index.html', error="Error retrieving story"), 500
 
 @app.route('/generate_story', methods=['POST'])
 def generate_story():
