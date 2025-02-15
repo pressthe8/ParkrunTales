@@ -130,30 +130,33 @@ def generate_story():
             return render_template('index.html', error=error_message), 404
 
         # Extract athlete's name from the markdown data
-        # The name is typically in the first line of the results table
+        # The name is typically in the first line after "Results for"
         import re
-        name_match = re.search(r'Results for ([^\n|]+)', markdown_data)
-        first_name = "Athlete"  # Default fallback
+        athlete_name = "Athlete"  # Default fallback
+
+        # Look for the name in the markdown data
+        name_pattern = r'Results for ([^|]+?)\s*(?:\||$)'
+        name_match = re.search(name_pattern, markdown_data)
         if name_match:
             full_name = name_match.group(1).strip()
-            first_name = full_name.split()[0]  # Get the first name
+            athlete_name = full_name  # Use the full name instead of just first name
 
         # Generate story prompt
         prompt = f"""Using the Markdown data that follows, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
 
-First: Locate a popular news story from the date they first attended a Parkrun event. This should be something light related to sports or entertainment.
+        First: Locate a popular news story from the date they first attended a Parkrun event. This should be something light related to sports or entertainment.
 
-Then craft a story in the third person to include:
+        Then craft a story in the third person to include:
 
-1. **Introduction:** Start with a hook that grabs the reader's attention.  This should include a humerous link to the news item identified around the date of their first parkrun.
+        1. **Introduction:** Start with a hook that grabs the reader's attention.  This should include a humerous link to the news item identified around the date of their first parkrun.
 
-2. **The Early Days & Evolving Affinities:** Describe their initial parkrun experiences. Were they hooked immediately, or were there long gaps betwwen events? Highlight key stats (total runs, best time so far), and mention a few locations they have visited.  Do they have a favorite course, or did their preferences change over time?
+        2. **The Early Days & Evolving Affinities:** Describe their initial parkrun experiences. Were they hooked immediately, or were there long gaps betwwen events? Highlight key stats (total runs, best time so far), and mention a few locations they have visited.  Do they have a favorite course, or did their preferences change over time?
 
-3. **Milestones and Memories:**  Mention if they have achieved any milestone clubs (25, 50, 100, 250, 500, 1000).  Weave these milestones into the narrative.  Instead of just stating "They reached their 50th parkrun," be creative and describe the occasion. Include anecdotes about highs and lows, particularly when they hit PBs.
+        3. **Milestones and Memories:**  Mention if they have achieved any milestone clubs (25, 50, 100, 250, 500, 1000).  Weave these milestones into the narrative.  Instead of just stating "They reached their 50th parkrun," be creative and describe the occasion. Include anecdotes about highs and lows, particularly when they hit PBs.
 
-4. **Celebration and Conclusion:**  Conclude by celebrating their achievements, regardless of their best or average times.  Focus on the journey, the community, and the personal satisfaction of participating.  Avoid cheesy clichés, but acknowledge their dedication.
+        4. **Celebration and Conclusion:**  Conclude by celebrating their achievements, regardless of their best or average times.  Focus on the journey, the community, and the personal satisfaction of participating.  Avoid cheesy clichés, but acknowledge their dedication.
 
-5. **Markdown Data Integration:**  Emphasize that the story should seamlessly integrate the provided Markdown data.  The generated narrative should feel natural and not like a list of facts.
+        5. **Markdown Data Integration:**  Emphasize that the story should seamlessly integrate the provided Markdown data.  The generated narrative should feel natural and not like a list of facts.
 
         {markdown_data}"""
 
@@ -167,13 +170,13 @@ Then craft a story in the third person to include:
             'athlete_id': athlete_id,
             'content': story_content,
             'url_hash': url_hash,
-            'athlete_name': first_name,  # Add the athlete's name
+            'athlete_name': athlete_name,  # Use the full athlete name
             'created_at': {'.sv': 'timestamp'}
         }
 
         ref.push(story_data)
 
-        return render_template('story.html', story=story_content, url_hash=url_hash, athlete_name=first_name)
+        return render_template('story.html', story=story_content, url_hash=url_hash, athlete_name=athlete_name)
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
