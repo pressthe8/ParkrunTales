@@ -90,8 +90,11 @@ def view_story(url_hash):
         logger.error(f"Error retrieving story: {str(e)}")
         return render_template('index.html', error="Error retrieving story"), 500
 
-@app.route('/generate_story', methods=['POST'])
+@app.route('/generate_story', methods=['GET', 'POST'])
 def generate_story():
+    if request.method == 'GET':
+        return redirect(url_for('index'))
+
     athlete_id = request.form.get('athlete_id')
 
     if not athlete_id:
