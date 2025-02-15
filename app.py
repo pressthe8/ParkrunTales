@@ -130,16 +130,16 @@ def generate_story():
             return render_template('index.html', error=error_message), 404
 
         # Extract athlete's name from the markdown data
-        # The name is typically in the first line after "Results for"
+        # The name is typically in a header format "## Name"
         import re
         athlete_name = "Athlete"  # Default fallback
 
-        # Look for the name in the markdown data
-        name_pattern = r'Results for ([^|]+?)\s*(?:\||$)'
+        # Look for the name in the markdown data using the header format
+        name_pattern = r'## ([A-Za-z\s]+)'
         name_match = re.search(name_pattern, markdown_data)
         if name_match:
-            full_name = name_match.group(1).strip()
-            athlete_name = full_name  # Use the full name instead of just first name
+            athlete_name = name_match.group(1).strip()
+            logger.debug(f"Found athlete name: {athlete_name}")
 
         # Generate story prompt
         prompt = f"""Using the Markdown data that follows, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
