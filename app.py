@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from firecrawl import FirecrawlApp
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, db
 import secrets
 import json
 
@@ -26,8 +26,12 @@ if not firebase_creds_json:
     raise ValueError("Firebase credentials not found in environment variables")
 
 cred = credentials.Certificate(json.loads(firebase_creds_json))
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://parkrun-story-default-rtdb.europe-west1.firebasedatabase.app/'
+})
+
+# Get a reference to the database
+ref = db.reference('stories')
 
 # Configure Gemini API
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
@@ -45,13 +49,16 @@ def index():
 
 @app.route('/story/<url_hash>')
 def view_story(url_hash):
-    story_ref = db.collection('stories').where('url_hash', '==', url_hash).limit(1).stream()
-    story_doc = next(story_ref, None)
+    # Query the Realtime Database for the story
+    stories = ref.order_by_child('url_hash').equal_to(url_hash).get()
 
-    if not story_doc:
+    if not stories:
         return render_template('index.html', error="Story not found"), 404
 
-    story_data = story_doc.to_dict()
+    # Get the first (and should be only) story with this hash
+    story_id = list(stories.keys())[0]
+    story_data = stories[story_id]
+
     return render_template('story.html', story=story_data['content'], url_hash=url_hash)
 
 @app.route('/generate_story', methods=['POST'])
@@ -99,16 +106,16 @@ def generate_story():
         response = model.generate_content(prompt)
         story_content = response.text
 
-        # Create and save the story to Firebase
+        # Create and save the story to Firebase Realtime Database
         url_hash = generate_url_hash()
         story_data = {
             'athlete_id': athlete_id,
             'content': story_content,
             'url_hash': url_hash,
-            'created_at': firestore.SERVER_TIMESTAMP
+            'created_at': {'.sv': 'timestamp'}
         }
 
-        db.collection('stories').add(story_data)
+        ref.push(story_data)
 
         return render_template('story.html', story=story_content, url_hash=url_hash)
 
