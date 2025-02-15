@@ -1,9 +1,11 @@
 import os
 import logging
-from flask import Flask, render_template, request
+import secrets
+from flask import Flask, render_template, request, redirect, url_for
 from dotenv import load_dotenv
 import google.generativeai as genai
 from firecrawl import FirecrawlApp
+from flask_sqlalchemy import SQLAlchemy
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -15,6 +17,18 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default-secret-key")
 
+# Configure database
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
+}
+db = SQLAlchemy()
+db.init_app(app)
+
+# Import models after db initialization
+from models import Story
+
 # Configure Gemini API
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
 model = genai.GenerativeModel('gemini-pro')
@@ -22,9 +36,19 @@ model = genai.GenerativeModel('gemini-pro')
 # Configure Firecrawl
 firecrawl = FirecrawlApp(api_key=os.getenv('FIRECRAWL_API_KEY'))
 
+def generate_url_hash():
+    return secrets.token_hex(8)  # 16 character hash
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/story/<url_hash>')
+def view_story(url_hash):
+    story = Story.query.filter_by(url_hash=url_hash).first()
+    if not story:
+        return render_template('index.html', error="Story not found"), 404
+    return render_template('story.html', story=story.content, url_hash=url_hash)
 
 @app.route('/generate_story', methods=['POST'])
 def generate_story():
@@ -69,9 +93,19 @@ def generate_story():
 
         # Generate story using Gemini
         response = model.generate_content(prompt)
-        story = response.text
+        story_content = response.text
 
-        return render_template('story.html', story=story)
+        # Create and save the story
+        url_hash = generate_url_hash()
+        story = Story(
+            athlete_id=athlete_id,
+            content=story_content,
+            url_hash=url_hash
+        )
+        db.session.add(story)
+        db.session.commit()
+
+        return render_template('story.html', story=story_content, url_hash=url_hash)
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
@@ -84,3 +118,6 @@ def not_found_error(error):
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('index.html', error="Internal server error"), 500
+
+with app.app_context():
+    db.create_all()

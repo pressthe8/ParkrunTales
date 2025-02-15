@@ -9,6 +9,14 @@
                 <div class="story-content">
                     {{ story | safe }}
                 </div>
+                {% if url_hash %}
+                <div class="text-center mt-4">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" value="{{ request.host_url }}story/{{ url_hash }}" id="storyUrl" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard()">Copy Link</button>
+                    </div>
+                </div>
+                {% endif %}
                 <div class="text-center mt-4">
                     <a href="/" class="btn btn-secondary">Generate Another Story</a>
                 </div>
@@ -16,4 +24,20 @@
         </div>
     </div>
 </div>
+
+<script>
+function copyToClipboard() {
+    var copyText = document.getElementById("storyUrl");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(copyText.value);
+
+    var button = event.target;
+    var originalText = button.innerHTML;
+    button.innerHTML = "Copied!";
+    setTimeout(function() {
+        button.innerHTML = originalText;
+    }, 2000);
+}
+</script>
 {% endblock %}
