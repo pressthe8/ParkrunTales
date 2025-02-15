@@ -6,8 +6,8 @@
         <div class="card bg-dark">
             <div class="card-body">
                 <div class="text-center mb-4">
-                    <img src="{{ url_for('static', filename='images/runner.svg') }}" alt="Runner" class="mb-3" style="width: 150px;">
-                    <h1 class="display-4">Welcome to Parkrun Story Generator</h1>
+                    <img src="{{ url_for('static', filename='images/run-story-image.jpg') }}" alt="Runner" class="mb-3" style="width: 200px;">
+                    <h1 class="display-4">Parkrun Story Generator</h1>
                     <p class="lead">Discover your unique Parkrun journey transformed into a delightful story!</p>
                 </div>
 
@@ -26,8 +26,14 @@
                     </div>
                     <div class="text-center">
                         <button type="submit" class="btn btn-primary" id="generateBtn">
-                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                            Generate My Story
+                            <span class="loading-animation d-none">
+                                <pre class="running-animation">
+   o
+./|\/
+ /\
+                                </pre>
+                            </span>
+                            <span class="button-text">Generate My Story</span>
                         </button>
                     </div>
                 </form>
@@ -35,4 +41,25 @@
         </div>
     </div>
 </div>
+
+<style>
+.running-animation {
+    display: inline-block;
+    font-family: monospace;
+    margin: 0;
+    line-height: 1;
+    color: white;
+}
+</style>
+
+<script>
+document.getElementById('storyForm').addEventListener('submit', function(e) {
+    const btn = document.getElementById('generateBtn');
+    const loadingAnim = btn.querySelector('.loading-animation');
+    const buttonText = btn.querySelector('.button-text');
+
+    loadingAnim.classList.remove('d-none');
+    buttonText.classList.add('d-none');
+});
+</script>
 {% endblock %}
