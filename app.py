@@ -1,11 +1,13 @@
 import os
 import logging
-import secrets
 from flask import Flask, render_template, request, redirect, url_for
 from dotenv import load_dotenv
 import google.generativeai as genai
 from firecrawl import FirecrawlApp
-from flask_sqlalchemy import SQLAlchemy
+import firebase_admin
+from firebase_admin import credentials, firestore
+import secrets
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -14,20 +16,18 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Initialize Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default-secret-key")
 
-# Configure database
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_recycle": 300,
-    "pool_pre_ping": True,
-}
-db = SQLAlchemy()
-db.init_app(app)
+# Initialize Firebase
+firebase_creds_json = os.environ.get('FIREBASE_CREDENTIALS')
+if not firebase_creds_json:
+    raise ValueError("Firebase credentials not found in environment variables")
 
-# Import models after db initialization
-from models import Story
+cred = credentials.Certificate(json.loads(firebase_creds_json))
+firebase_admin.initialize_app(cred)
+db = firestore.client()
 
 # Configure Gemini API
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
@@ -45,10 +45,14 @@ def index():
 
 @app.route('/story/<url_hash>')
 def view_story(url_hash):
-    story = Story.query.filter_by(url_hash=url_hash).first()
-    if not story:
+    story_ref = db.collection('stories').where('url_hash', '==', url_hash).limit(1).stream()
+    story_doc = next(story_ref, None)
+
+    if not story_doc:
         return render_template('index.html', error="Story not found"), 404
-    return render_template('story.html', story=story.content, url_hash=url_hash)
+
+    story_data = story_doc.to_dict()
+    return render_template('story.html', story=story_data['content'], url_hash=url_hash)
 
 @app.route('/generate_story', methods=['POST'])
 def generate_story():
@@ -95,15 +99,16 @@ def generate_story():
         response = model.generate_content(prompt)
         story_content = response.text
 
-        # Create and save the story
+        # Create and save the story to Firebase
         url_hash = generate_url_hash()
-        story = Story(
-            athlete_id=athlete_id,
-            content=story_content,
-            url_hash=url_hash
-        )
-        db.session.add(story)
-        db.session.commit()
+        story_data = {
+            'athlete_id': athlete_id,
+            'content': story_content,
+            'url_hash': url_hash,
+            'created_at': firestore.SERVER_TIMESTAMP
+        }
+
+        db.collection('stories').add(story_data)
 
         return render_template('story.html', story=story_content, url_hash=url_hash)
 
@@ -118,6 +123,3 @@ def not_found_error(error):
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('index.html', error="Internal server error"), 500
-
-with app.app_context():
-    db.create_all()
