@@ -138,8 +138,10 @@ def generate_story():
         name_pattern = r'## ([A-Za-z\s]+)'
         name_match = re.search(name_pattern, markdown_data)
         if name_match:
-            athlete_name = name_match.group(1).strip()
-            logger.debug(f"Found athlete name: {athlete_name}")
+            full_name = name_match.group(1).strip()
+            # Extract just the first name
+            athlete_name = full_name.split()[0]  # Get the first name only
+            logger.debug(f"Found athlete name: {full_name}, using first name: {athlete_name}")
 
         # Generate story prompt
         prompt = f"""Using the Markdown data that follows, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
