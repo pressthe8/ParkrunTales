@@ -127,7 +127,22 @@ def generate_story():
             return render_template('index.html', error=error_message), 404
 
         # Generate story prompt
-        prompt = f"""Using the following Markdown data, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun journey of the runner. The story should be in the third person, include a notable news event from the week of their first parkrun, highlight key stats (total runs, best time), and mention a few locations they have visited. Add some playful running-related puns but keep it engaging and concise.
+        prompt = f"""Using the following Markdown data, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
+
+
+The story should be in the third person, and include:
+
+
+1) Introduction including a notable news item from around the date of their first parkrun. Something light related to sports or entertainment.
+
+
+2) highlight key stats (total runs, best time), and mention a few locations they have visited, or particular affinities to events that changed over time.
+
+
+3) Mention is they have achieved any milestones clubs (25, 50, 100, 250, 500, 1000)
+
+
+4) Be sure to celebrate their achievements regardless of best / average but don't be too cheesy about it. Also mention highs and lows through their event history, particularly when they hit PBs 
 
         {markdown_data}"""
 
