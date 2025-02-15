@@ -1,0 +1,30 @@
+[Unit]
+Description=Parkrun Story Generator
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/path/to/app
+Environment=FLASK_ENV=production
+Environment=FLASK_SECRET_KEY=/run/secrets/flask_secret
+Environment=FIRECRAWL_API_KEY=/run/secrets/firecrawl_api_key
+Environment=GEMINI_API_KEY=/run/secrets/gemini_api_key
+Environment=FIREBASE_CREDENTIALS=/run/secrets/firebase_credentials
+
+# Logging
+StandardOutput=append:/var/log/parkrun-story/access.log
+StandardError=append:/var/log/parkrun-story/error.log
+
+# Security
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+
+ExecStartPre=/bin/mkdir -p /var/log/parkrun-story
+ExecStartPre=/bin/chown -R www-data:www-data /var/log/parkrun-story
+ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:5000 --workers 4 main:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
