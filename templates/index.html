@@ -27,7 +27,7 @@
                     <div class="text-center">
                         <button type="submit" class="btn btn-primary" id="generateBtn">
                             <div class="button-content">
-                                <div class="button-text">Generate My Story</div>
+                                <div class="button-text text-white">Generate My Story</div>
                                 <div class="runner-animation d-none">
                                     <div class="runner-emoji"></div>
                                 </div>
@@ -58,6 +58,7 @@
     left: 0;
     font-size: 20px;
     white-space: pre;
+    color: white;
 }
 </style>
 
@@ -72,12 +73,19 @@ document.getElementById('storyForm').addEventListener('submit', function(e) {
     runnerAnim.classList.remove('d-none');
 
     const frames = [
-        '  🏃‍♂️  ',
-        ' 🏃‍♂️   ',
-        '🏃‍♂️    ',
-        '   🏃‍♂️ ',
-        '    🏃‍♂️',
-        '   🏃‍♂️ '
+        '      🏃‍♂️      ',
+        '     🏃‍♂️       ',
+        '    🏃‍♂️        ',
+        '   🏃‍♂️         ',
+        '  🏃‍♂️          ',
+        ' 🏃‍♂️           ',
+        '🏃‍♂️            ',
+        ' 🏃‍♂️           ',
+        '  🏃‍♂️          ',
+        '   🏃‍♂️         ',
+        '    🏃‍♂️        ',
+        '     🏃‍♂️       ',
+        '      🏃‍♂️      ',
     ];
 
     let frameIndex = 0;
