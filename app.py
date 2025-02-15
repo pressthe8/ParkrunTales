@@ -144,21 +144,19 @@ def generate_story():
             logger.debug(f"Found athlete name: {full_name}, using first name: {athlete_name}")
 
         # Generate story prompt
-        prompt = f"""Using the Markdown data that follows, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
+        prompt = f"""Using the Markdown data that follows these instructions, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
 
-        First: Locate a popular news story from the date they first attended a Parkrun event. This should be something light related to sports or entertainment.
+Requirement - Craft a story in the third person to include:
 
-        Then craft a story in the third person to include:
+1. **Introduction:** Start by talking about the date and location of their first ever parkrun, with a creative reason for them first getting involved.
 
-        1. **Introduction:** Start with a hook that grabs the reader's attention.  This should include a humerous link to the news item identified around the date of their first parkrun.
+2. **Key Stats & Evolving Affinities:** Highlight key stats (total runs, best time so far), and mention a few locations they have visited.  Do they have a favorite course, or did their preferences change over time?
 
-        2. **The Early Days & Evolving Affinities:** Describe their initial parkrun experiences. Were they hooked immediately, or were there long gaps betwwen events? Highlight key stats (total runs, best time so far), and mention a few locations they have visited.  Do they have a favorite course, or did their preferences change over time?
+3. **Milestones and Memories:**  Mention if they have achieved any milestone clubs and include anecdotes about highs and lows, particularly when they hit PBs.
 
-        3. **Milestones and Memories:**  Mention if they have achieved any milestone clubs (25, 50, 100, 250, 500, 1000).  Weave these milestones into the narrative.  Instead of just stating "They reached their 50th parkrun," be creative and describe the occasion. Include anecdotes about highs and lows, particularly when they hit PBs.
+Run Number is only interesting if it is 1, signifying the runner participated in a debut event at that course. 
 
-        4. **Celebration and Conclusion:**  Conclude by celebrating their achievements, regardless of their best or average times.  Focus on the journey, the community, and the personal satisfaction of participating.  Avoid cheesy clichés, but acknowledge their dedication.
-
-        5. **Markdown Data Integration:**  Emphasize that the story should seamlessly integrate the provided Markdown data.  The generated narrative should feel natural and not like a list of facts.
+4. **Celebration and Conclusion:**  Conclude by celebrating their achievements, regardless of their best or average times.  Focus on the journey, the community, and the personal satisfaction of participating.  Avoid cheesy clichés, but acknowledge their dedication.
 
         {markdown_data}"""
 
