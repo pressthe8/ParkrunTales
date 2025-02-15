@@ -6,8 +6,8 @@
         <div class="card bg-dark">
             <div class="card-body">
                 <div class="text-center mb-4">
-                    <img src="{{ url_for('static', filename='images/run-story-image.jpg') }}" alt="Runner" class="mb-3" style="width: 200px;">
-                    <h1 class="display-4">Parkrun Story Generator</h1>
+                    <img src="{{ url_for('static', filename='images/runner.svg') }}" alt="Runner" class="mb-3" style="width: 150px;">
+                    <h1 class="display-4">Welcome to Parkrun Story Generator</h1>
                     <p class="lead">Discover your unique Parkrun journey transformed into a delightful story!</p>
                 </div>
 
@@ -26,12 +26,8 @@
                     </div>
                     <div class="text-center">
                         <button type="submit" class="btn btn-primary" id="generateBtn">
-                            <div class="button-content">
-                                <div class="button-text text-white">Generate My Story</div>
-                                <div class="runner-animation d-none">
-                                    <div class="runner-emoji"></div>
-                                </div>
-                            </div>
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            Generate My Story
                         </button>
                     </div>
                 </form>
@@ -39,63 +35,4 @@
         </div>
     </div>
 </div>
-
-<style>
-.button-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
-.runner-animation {
-    height: 24px;
-    width: 100px;
-    position: relative;
-    overflow: hidden;
-}
-.runner-emoji {
-    position: absolute;
-    left: 0;
-    font-size: 20px;
-    white-space: pre;
-    color: white;
-}
-</style>
-
-<script>
-document.getElementById('storyForm').addEventListener('submit', function(e) {
-    const btn = document.getElementById('generateBtn');
-    const buttonText = btn.querySelector('.button-text');
-    const runnerAnim = btn.querySelector('.runner-animation');
-    const runnerEmoji = btn.querySelector('.runner-emoji');
-
-    buttonText.textContent = 'Generating...';
-    runnerAnim.classList.remove('d-none');
-
-    const frames = [
-        '      🏃‍♂️      ',
-        '     🏃‍♂️       ',
-        '    🏃‍♂️        ',
-        '   🏃‍♂️         ',
-        '  🏃‍♂️          ',
-        ' 🏃‍♂️           ',
-        '🏃‍♂️            ',
-        ' 🏃‍♂️           ',
-        '  🏃‍♂️          ',
-        '   🏃‍♂️         ',
-        '    🏃‍♂️        ',
-        '     🏃‍♂️       ',
-        '      🏃‍♂️      ',
-    ];
-
-    let frameIndex = 0;
-
-    const animate = setInterval(() => {
-        runnerEmoji.textContent = frames[frameIndex];
-        frameIndex = (frameIndex + 1) % frames.length;
-    }, 200);
-
-    btn.dataset.animationInterval = animate;
-});
-</script>
 {% endblock %}
