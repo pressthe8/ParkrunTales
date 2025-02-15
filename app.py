@@ -84,7 +84,7 @@ def view_story(url_hash):
             logger.debug(f"No story found with url_hash: {url_hash}")
             return render_template('index.html', error="Story not found"), 404
 
-        return render_template('story.html', story=matching_story['content'], url_hash=url_hash)
+        return render_template('story.html', story=matching_story['content'], url_hash=url_hash, athlete_name=matching_story.get('athlete_name', 'Athlete'))
 
     except Exception as e:
         logger.error(f"Error retrieving story: {str(e)}")
@@ -129,6 +129,15 @@ def generate_story():
             error_message = f"'{athlete_id}' does not seem to be a valid Athlete ID, please try again"
             return render_template('index.html', error=error_message), 404
 
+        # Extract athlete's name from the markdown data
+        # The name is typically in the first line of the results table
+        import re
+        name_match = re.search(r'Results for ([^\n|]+)', markdown_data)
+        first_name = "Athlete"  # Default fallback
+        if name_match:
+            full_name = name_match.group(1).strip()
+            first_name = full_name.split()[0]  # Get the first name
+
         # Generate story prompt
         prompt = f"""Using the Markdown data that follows, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
 
@@ -158,12 +167,13 @@ Then craft a story in the third person to include:
             'athlete_id': athlete_id,
             'content': story_content,
             'url_hash': url_hash,
+            'athlete_name': first_name,  # Add the athlete's name
             'created_at': {'.sv': 'timestamp'}
         }
 
         ref.push(story_data)
 
-        return render_template('story.html', story=story_content, url_hash=url_hash)
+        return render_template('story.html', story=story_content, url_hash=url_hash, athlete_name=first_name)
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")

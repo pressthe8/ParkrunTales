@@ -2,7 +2,7 @@
 
 {% block head %}
 <!-- OpenGraph meta tags for social media sharing -->
-<meta property="og:title" content="Parkrun Story - Personal Running Journey">
+<meta property="og:title" content="{{ athlete_name }}'s Parkrun Story">
 <meta property="og:description" content="{{ story[:200] }}...">
 <meta property="og:type" content="article">
 <meta property="og:url" content="{{ request.host_url }}story/{{ url_hash }}">
@@ -15,7 +15,7 @@
     <div class="col-md-8">
         <div class="card bg-dark">
             <div class="card-body">
-                <h2 class="card-title text-center mb-4">Your Parkrun Story</h2>
+                <h2 class="card-title text-center mb-4">{{ athlete_name }}'s Parkrun Story</h2>
                 <div class="story-content">
                     {{ story | safe }}
                 </div>
@@ -26,7 +26,7 @@
                         <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard()">Copy Link</button>
                     </div>
                     <div class="social-share-buttons mt-3">
-                        <a href="https://twitter.com/intent/tweet?url={{ (request.host_url + 'story/' + url_hash) | urlencode }}&text=Check%20out%20my%20Parkrun%20story!" 
+                        <a href="https://twitter.com/intent/tweet?url={{ (request.host_url + 'story/' + url_hash) | urlencode }}&text=Check%20out%20{{ athlete_name }}'s%20Parkrun%20story!" 
                            class="btn btn-primary btn-sm" target="_blank">
                             <i class="bi bi-twitter"></i> Share on Twitter
                         </a>
