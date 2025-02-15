@@ -11,6 +11,8 @@ import json
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import textwrap
+import shutil
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -22,6 +24,18 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default-secret-key")
+
+# Add this code after app initialization
+# Ensure static/images directory exists and copy the run-story-image
+static_images_dir = Path('static/images')
+static_images_dir.mkdir(parents=True, exist_ok=True)
+
+# Copy the image from attached_assets to static/images if it doesn't exist
+source_image = Path('attached_assets/run-story-image.jpg')
+target_image = static_images_dir / 'run-story-image.jpg'
+if source_image.exists() and not target_image.exists():
+    shutil.copy2(source_image, target_image)
+
 
 # Initialize Firebase
 firebase_creds_json = os.environ.get('FIREBASE_CREDENTIALS')
