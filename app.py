@@ -102,6 +102,9 @@ def generate_story():
         return render_template('index.html', error='Athlete ID is required'), 400
 
     try:
+        start_time = time.time()
+        logger.info(f"Starting story generation for athlete ID: {athlete_id}")
+
         # Remove 'A' prefix if present
         numeric_id = athlete_id.lstrip('A')
 
@@ -118,18 +121,19 @@ def generate_story():
                     story_data.get('last_fetched') and 
                     (current_time - story_data['last_fetched']) < CACHE_DURATION):
                     recent_story = story_data
-                    logger.debug(f"Found recent story for athlete {athlete_id}")
+                    logger.info(f"Found recent story for athlete {athlete_id} - Using cached data from {story_data['last_fetched']}")
                     break
 
         if recent_story:
             # Use cached markdown data
             markdown_data = recent_story['markdown_data']
             athlete_name = recent_story.get('athlete_name', 'Athlete')
-            logger.debug("Using cached markdown data")
+            logger.info("✅ Using cached markdown data - No API call needed")
         else:
             # Fetch new data from Parkrun
+            logger.info(f"No recent data found for {athlete_id} - Making new API call")
             parkrun_url = f"https://www.parkrun.org.uk/parkrunner/{numeric_id}/all/"
-            logger.debug(f"Attempting to scrape URL: {parkrun_url}")
+            api_start_time = time.time()
 
             response = firecrawl.scrape_url(
                 url=parkrun_url,
@@ -137,6 +141,9 @@ def generate_story():
                     'formats': ['markdown']
                 }
             )
+
+            api_duration = time.time() - api_start_time
+            logger.info(f"🌐 API call completed in {api_duration:.2f} seconds")
 
             if not response or not isinstance(response, dict) or 'markdown' not in response:
                 logger.error("Invalid response format from Firecrawl")
@@ -150,7 +157,7 @@ def generate_story():
                 error_message = f"'{athlete_id}' does not seem to be a valid Athlete ID, please try again"
                 return render_template('index.html', error=error_message), 404
 
-        # Extract athlete's name (code remains the same)
+        # Extract athlete's name
         import re
         athlete_name = "Athlete"  # Default fallback
         name_pattern = r'## ([A-Za-z\s]+)'
@@ -160,7 +167,7 @@ def generate_story():
             athlete_name = full_name.split()[0]
             logger.debug(f"Found athlete name: {full_name}, using first name: {athlete_name}")
 
-        # Generate story prompt and content (code remains the same)
+        # Generate story prompt and content
         prompt = f"""Using the Markdown data that follows these instructions, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
 
 Requirement - Craft a story in the third person to include:
@@ -192,6 +199,9 @@ Run Number is only interesting if it is 1, signifying the runner participated in
         }
 
         ref.push(story_data)
+
+        total_duration = time.time() - start_time
+        logger.info(f"✨ Total story generation completed in {total_duration:.2f} seconds")
 
         return render_template('story.html', story=story_content, url_hash=url_hash, athlete_name=athlete_name)
 
