@@ -91,33 +91,6 @@ def view_story(url_hash):
         logger.error(f"Error retrieving story: {str(e)}")
         return render_template('index.html', error="Error retrieving story"), 500
 
-def convert_markdown_to_json(markdown_data):
-    """Convert markdown data to structured JSON using Gemini API."""
-    prompt = f"""Please use the below markdown data and convert it into a neatly formatted json file that breaks out the key stats in 3 groups:
-
-1) Summary Stats for All Locations
-2) Best Overall Annual Achievements
-3) All Results
-
-Please ensure the output is valid JSON format.
-
-Here's the markdown data:
-{markdown_data}"""
-
-    try:
-        response = model.generate_content(prompt)
-        # Parse the response to ensure it's valid JSON
-        try:
-            json_data = json.loads(response.text)
-            return json_data
-        except json.JSONDecodeError:
-            # If the response isn't valid JSON, log it and return None
-            logger.error(f"Invalid JSON response from Gemini: {response.text[:200]}...")
-            return None
-    except Exception as e:
-        logger.error(f"Error converting markdown to JSON: {str(e)}")
-        return None
-
 @app.route('/generate_story', methods=['GET', 'POST'])
 def generate_story():
     if request.method == 'GET':
@@ -144,7 +117,7 @@ def generate_story():
         if stories:
             for story_id, story_data in stories.items():
                 if (story_data.get('athlete_id') == athlete_id and 
-                    story_data.get('parkrun_data') and  # Now checking for JSON data instead of markdown
+                    story_data.get('markdown_data') and 
                     story_data.get('last_fetched') and 
                     (current_time - story_data['last_fetched']) < CACHE_DURATION):
                     recent_story = story_data
@@ -152,10 +125,10 @@ def generate_story():
                     break
 
         if recent_story:
-            # Use cached JSON data
-            parkrun_data = recent_story['parkrun_data']
+            # Use cached markdown data
+            markdown_data = recent_story['markdown_data']
             athlete_name = recent_story.get('athlete_name', 'Athlete')
-            logger.info("✅ Using cached parkrun data - No API calls needed")
+            logger.info("✅ Using cached markdown data - No API call needed")
         else:
             # Fetch new data from Parkrun
             logger.info(f"No recent data found for {athlete_id} - Making new API call")
@@ -170,7 +143,7 @@ def generate_story():
             )
 
             api_duration = time.time() - api_start_time
-            logger.info(f"🌐 Firecrawl API call completed in {api_duration:.2f} seconds")
+            logger.info(f"🌐 API call completed in {api_duration:.2f} seconds")
 
             if not response or not isinstance(response, dict) or 'markdown' not in response:
                 logger.error("Invalid response format from Firecrawl")
@@ -184,39 +157,34 @@ def generate_story():
                 error_message = f"'{athlete_id}' does not seem to be a valid Athlete ID, please try again"
                 return render_template('index.html', error=error_message), 404
 
-            # Convert markdown to structured JSON
-            logger.info("Converting markdown to JSON format...")
-            json_start_time = time.time()
-            parkrun_data = convert_markdown_to_json(markdown_data)
-            json_duration = time.time() - json_start_time
-            logger.info(f"✨ JSON conversion completed in {json_duration:.2f} seconds")
+        # Extract athlete's name
+        import re
+        athlete_name = "Athlete"  # Default fallback
+        name_pattern = r'## ([A-Za-z\s]+)'
+        name_match = re.search(name_pattern, markdown_data)
+        if name_match:
+            full_name = name_match.group(1).strip()
+            athlete_name = full_name.split()[0]
+            logger.debug(f"Found athlete name: {full_name}, using first name: {athlete_name}")
 
-            if not parkrun_data:
-                return render_template('index.html', error="Error processing runner data"), 500
-
-            # Extract athlete's name
-            athlete_name = "Athlete"  # Default fallback
-            if isinstance(parkrun_data, dict) and "summary" in parkrun_data:
-                athlete_name = parkrun_data.get("summary", {}).get("name", "Athlete").split()[0]
-
-        # Generate story using JSON data
-        story_prompt = f"""Using the following JSON data about a parkrun athlete, create a lighthearted and fun short story (2-3 paragraphs) about their parkrun career.
+        # Generate story prompt and content
+        prompt = f"""Using the Markdown data that follows these instructions, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
 
 Requirement - Craft a story in the third person to include:
 
-1) Introduction: Start by talking about the date and location of their first ever parkrun, with a creative reason for them first getting involved.
-2) Key Stats & Evolving Affinities: Highlight key stats (total runs, best time so far), and mention a few locations they have visited.
-3) Milestones and Memories: Mention any milestone clubs achieved and include anecdotes about highs and lows, particularly PBs.
-4) Celebration and Conclusion: Celebrate their achievements focusing on the journey and community aspects.
+1. **Introduction:** Start by talking about the date and location of their first ever parkrun, with a creative reason for them first getting involved.
 
-Here's the structured data:
-{json.dumps(parkrun_data, indent=2)}"""
+2. **Key Stats & Evolving Affinities:** Highlight key stats (total runs, best time so far), and mention a few locations they have visited.  Do they have a favorite course, or did their preferences change over time?
 
-        story_start_time = time.time()
-        response = model.generate_content(story_prompt)
+3. **Milestones and Memories:**  Mention if they have achieved any milestone clubs and include anecdotes about highs and lows, particularly when they hit PBs.
+
+Run Number is only interesting if it is 1, signifying the runner participated in a debut event at that course. 
+
+4. **Celebration and Conclusion:**  Conclude by celebrating their achievements, regardless of their best or average times.  Focus on the journey, the community, and the personal satisfaction of participating.  Avoid cheesy clichés, but acknowledge their dedication.
+
+        {markdown_data}"""
+        response = model.generate_content(prompt)
         story_content = response.text
-        story_duration = time.time() - story_start_time
-        logger.info(f"📖 Story generation completed in {story_duration:.2f} seconds")
 
         # Create and save the story with additional fields
         url_hash = generate_url_hash()
@@ -225,15 +193,15 @@ Here's the structured data:
             'content': story_content,
             'url_hash': url_hash,
             'athlete_name': athlete_name,
-            'parkrun_data': parkrun_data,  # Store JSON instead of markdown
-            'last_fetched': current_time,
+            'markdown_data': markdown_data,  # Store the markdown data
+            'last_fetched': current_time,    # Store fetch timestamp
             'created_at': {'.sv': 'timestamp'}
         }
 
         ref.push(story_data)
 
         total_duration = time.time() - start_time
-        logger.info(f"✨ Total process completed in {total_duration:.2f} seconds")
+        logger.info(f"✨ Total story generation completed in {total_duration:.2f} seconds")
 
         return render_template('story.html', story=story_content, url_hash=url_hash, athlete_name=athlete_name)
 
