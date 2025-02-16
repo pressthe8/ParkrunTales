@@ -13,6 +13,7 @@ from io import BytesIO
 import textwrap
 import shutil
 from pathlib import Path
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -36,7 +37,7 @@ if source_image.exists() and not target_image.exists():
     shutil.copy2(source_image, target_image)
 
 # Initialize Firebase
-cred = credentials.Certificate(eval(os.environ.get('FIREBASE_CREDENTIALS')))
+cred = credentials.Certificate(json.loads(os.environ.get('FIREBASE_CREDENTIALS', '{}')))
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://parkrun-story-default-rtdb.europe-west1.firebasedatabase.app/'
 })
@@ -143,11 +144,6 @@ def generate_story():
             markdown_data = response['markdown']
             logger.debug(f"Received markdown data: {markdown_data[:200]}...")
 
-            # Check for invalid athlete ID
-            if "couldn't find the page you were looking for" in markdown_data.lower():
-                error_message = f"'{athlete_id}' does not seem to be a valid Athlete ID, please try again"
-                return render_template('index.html', error=error_message), 404
-
         # Extract athlete's name
         import re
         athlete_name = "Athlete"  # Default fallback
@@ -158,6 +154,7 @@ def generate_story():
             logger.debug(f"Found athlete name: {full_name}, using first name: {athlete_name}")
 
         # Generate story prompt and content
+        gemini_start_time = time.time()
         prompt = f"""Using the Markdown data that follows these instructions, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
 
 Requirement - Craft a story in the third person to include:
@@ -175,6 +172,8 @@ Run Number is only interesting if it is 1, signifying the runner participated in
         {markdown_data}"""
         response = model.generate_content(prompt)
         story_content = response.text
+        gemini_duration = time.time() - gemini_start_time
+        logger.info(f"🤖 Gemini story generation completed in {gemini_duration:.2f} seconds")
 
         # Create and save the story with additional fields
         url_hash = generate_url_hash()
@@ -188,7 +187,10 @@ Run Number is only interesting if it is 1, signifying the runner participated in
             'created_at': {'.sv': 'timestamp'}
         }
 
+        firebase_start_time = time.time()
         ref.push(story_data)
+        firebase_duration = time.time() - firebase_start_time
+        logger.info(f"📦 Firebase write completed in {firebase_duration:.2f} seconds")
 
         total_duration = time.time() - start_time
         logger.info(f"✨ Total story generation completed in {total_duration:.2f} seconds")
