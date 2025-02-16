@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 from flask import Flask, render_template, request, redirect, url_for, send_file
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -101,49 +102,65 @@ def generate_story():
         return render_template('index.html', error='Athlete ID is required'), 400
 
     try:
-        # Remove 'A' prefix if present and format the Parkrun URL
+        # Remove 'A' prefix if present
         numeric_id = athlete_id.lstrip('A')
-        parkrun_url = f"https://www.parkrun.org.uk/parkrunner/{numeric_id}/all/"
 
-        logger.debug(f"Attempting to scrape URL: {parkrun_url}")
+        # Check if we have recent data for this athlete
+        stories = ref.get()
+        current_time = int(time.time())
+        CACHE_DURATION = 7 * 24 * 60 * 60  # 7 days in seconds
 
-        # Use Firecrawl Python client to scrape the page
-        response = firecrawl.scrape_url(
-            url=parkrun_url,
-            params={
-                'formats': ['markdown']
-            }
-        )
+        recent_story = None
+        if stories:
+            for story_id, story_data in stories.items():
+                if (story_data.get('athlete_id') == athlete_id and 
+                    story_data.get('markdown_data') and 
+                    story_data.get('last_fetched') and 
+                    (current_time - story_data['last_fetched']) < CACHE_DURATION):
+                    recent_story = story_data
+                    logger.debug(f"Found recent story for athlete {athlete_id}")
+                    break
 
-        logger.debug(f"Firecrawl response: {response}")
+        if recent_story:
+            # Use cached markdown data
+            markdown_data = recent_story['markdown_data']
+            athlete_name = recent_story.get('athlete_name', 'Athlete')
+            logger.debug("Using cached markdown data")
+        else:
+            # Fetch new data from Parkrun
+            parkrun_url = f"https://www.parkrun.org.uk/parkrunner/{numeric_id}/all/"
+            logger.debug(f"Attempting to scrape URL: {parkrun_url}")
 
-        if not response or not isinstance(response, dict) or 'markdown' not in response:
-            logger.error("Invalid response format from Firecrawl")
-            return render_template('index.html', error="Could not fetch runner data"), 500
+            response = firecrawl.scrape_url(
+                url=parkrun_url,
+                params={
+                    'formats': ['markdown']
+                }
+            )
 
-        markdown_data = response['markdown']
-        logger.debug(f"Received markdown data: {markdown_data[:200]}...")
+            if not response or not isinstance(response, dict) or 'markdown' not in response:
+                logger.error("Invalid response format from Firecrawl")
+                return render_template('index.html', error="Could not fetch runner data"), 500
 
-        # Check if the response indicates a "page not found" error
-        if "couldn't find the page you were looking for" in markdown_data.lower():
-            error_message = f"'{athlete_id}' does not seem to be a valid Athlete ID, please try again"
-            return render_template('index.html', error=error_message), 404
+            markdown_data = response['markdown']
+            logger.debug(f"Received markdown data: {markdown_data[:200]}...")
 
-        # Extract athlete's name from the markdown data
-        # The name is typically in a header format "## Name"
+            # Check for invalid athlete ID
+            if "couldn't find the page you were looking for" in markdown_data.lower():
+                error_message = f"'{athlete_id}' does not seem to be a valid Athlete ID, please try again"
+                return render_template('index.html', error=error_message), 404
+
+        # Extract athlete's name (code remains the same)
         import re
         athlete_name = "Athlete"  # Default fallback
-
-        # Look for the name in the markdown data using the header format
         name_pattern = r'## ([A-Za-z\s]+)'
         name_match = re.search(name_pattern, markdown_data)
         if name_match:
             full_name = name_match.group(1).strip()
-            # Extract just the first name
-            athlete_name = full_name.split()[0]  # Get the first name only
+            athlete_name = full_name.split()[0]
             logger.debug(f"Found athlete name: {full_name}, using first name: {athlete_name}")
 
-        # Generate story prompt
+        # Generate story prompt and content (code remains the same)
         prompt = f"""Using the Markdown data that follows these instructions, create a lighthearted and fun short story (2-3 paragraphs) about the parkrun career of the runner.
 
 Requirement - Craft a story in the third person to include:
@@ -159,18 +176,18 @@ Run Number is only interesting if it is 1, signifying the runner participated in
 4. **Celebration and Conclusion:**  Conclude by celebrating their achievements, regardless of their best or average times.  Focus on the journey, the community, and the personal satisfaction of participating.  Avoid cheesy clichés, but acknowledge their dedication.
 
         {markdown_data}"""
-
-        # Generate story using Gemini
         response = model.generate_content(prompt)
         story_content = response.text
 
-        # Create and save the story to Firebase Realtime Database
+        # Create and save the story with additional fields
         url_hash = generate_url_hash()
         story_data = {
             'athlete_id': athlete_id,
             'content': story_content,
             'url_hash': url_hash,
-            'athlete_name': athlete_name,  # Use the full athlete name
+            'athlete_name': athlete_name,
+            'markdown_data': markdown_data,  # Store the markdown data
+            'last_fetched': current_time,    # Store fetch timestamp
             'created_at': {'.sv': 'timestamp'}
         }
 
