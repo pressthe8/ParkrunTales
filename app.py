@@ -8,7 +8,6 @@ from firecrawl import FirecrawlApp
 import firebase_admin
 from firebase_admin import credentials, db
 import secrets
-import json
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import textwrap
@@ -26,7 +25,6 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default-secret-key")
 
-# Add this code after app initialization
 # Ensure static/images directory exists and copy the run-story-image
 static_images_dir = Path('static/images')
 static_images_dir.mkdir(parents=True, exist_ok=True)
@@ -37,13 +35,8 @@ target_image = static_images_dir / 'run-story-image.jpg'
 if source_image.exists() and not target_image.exists():
     shutil.copy2(source_image, target_image)
 
-
 # Initialize Firebase
-firebase_creds_json = os.environ.get('FIREBASE_CREDENTIALS')
-if not firebase_creds_json:
-    raise ValueError("Firebase credentials not found in environment variables")
-
-cred = credentials.Certificate(json.loads(firebase_creds_json))
+cred = credentials.Certificate(eval(os.environ.get('FIREBASE_CREDENTIALS')))
 firebase_admin.initialize_app(cred, {
     'databaseURL': 'https://parkrun-story-default-rtdb.europe-west1.firebasedatabase.app/'
 })
@@ -59,7 +52,8 @@ model = genai.GenerativeModel('gemini-pro')
 firecrawl = FirecrawlApp(api_key=os.getenv('FIRECRAWL_API_KEY'))
 
 def generate_url_hash():
-    return secrets.token_hex(8)  # 16 character hash
+    """Generate a unique URL hash for story sharing."""
+    return secrets.token_hex(8)
 
 @app.route('/')
 def index():
@@ -68,24 +62,27 @@ def index():
 @app.route('/story/<url_hash>')
 def view_story(url_hash):
     try:
-        # Get all stories and filter by url_hash
         stories = ref.get()
         if not stories:
             logger.debug("No stories found in database")
             return render_template('index.html', error="Story not found"), 404
 
         # Find the story with matching url_hash
-        matching_story = None
-        for story_id, story_data in stories.items():
-            if story_data.get('url_hash') == url_hash:
-                matching_story = story_data
-                break
+        matching_story = next(
+            (story_data for _, story_data in stories.items() 
+             if story_data.get('url_hash') == url_hash), None
+        )
 
         if not matching_story:
             logger.debug(f"No story found with url_hash: {url_hash}")
             return render_template('index.html', error="Story not found"), 404
 
-        return render_template('story.html', story=matching_story['content'], url_hash=url_hash, athlete_name=matching_story.get('athlete_name', 'Athlete'))
+        return render_template(
+            'story.html',
+            story=matching_story['content'],
+            url_hash=url_hash,
+            athlete_name=matching_story.get('athlete_name', 'Athlete')
+        )
 
     except Exception as e:
         logger.error(f"Error retrieving story: {str(e)}")
@@ -97,7 +94,6 @@ def generate_story():
         return redirect(url_for('index'))
 
     athlete_id = request.form.get('athlete_id')
-
     if not athlete_id:
         return render_template('index.html', error='Athlete ID is required'), 400
 
@@ -113,19 +109,16 @@ def generate_story():
         current_time = int(time.time())
         CACHE_DURATION = 7 * 24 * 60 * 60  # 7 days in seconds
 
-        recent_story = None
-        if stories:
-            for story_id, story_data in stories.items():
-                if (story_data.get('athlete_id') == athlete_id and 
-                    story_data.get('markdown_data') and 
-                    story_data.get('last_fetched') and 
-                    (current_time - story_data['last_fetched']) < CACHE_DURATION):
-                    recent_story = story_data
-                    logger.info(f"Found recent story for athlete {athlete_id} - Using cached data from {story_data['last_fetched']}")
-                    break
+        # Find recent story from cache
+        recent_story = next(
+            (story_data for _, story_data in stories.items() 
+             if story_data.get('athlete_id') == athlete_id 
+             and story_data.get('markdown_data')
+             and story_data.get('last_fetched')
+             and (current_time - story_data['last_fetched']) < CACHE_DURATION
+            ), None) if stories else None
 
         if recent_story:
-            # Use cached markdown data
             markdown_data = recent_story['markdown_data']
             athlete_name = recent_story.get('athlete_name', 'Athlete')
             logger.info("✅ Using cached markdown data - No API call needed")
@@ -137,9 +130,7 @@ def generate_story():
 
             response = firecrawl.scrape_url(
                 url=parkrun_url,
-                params={
-                    'formats': ['markdown']
-                }
+                params={'formats': ['markdown']}
             )
 
             api_duration = time.time() - api_start_time
@@ -160,8 +151,7 @@ def generate_story():
         # Extract athlete's name
         import re
         athlete_name = "Athlete"  # Default fallback
-        name_pattern = r'## ([A-Za-z\s]+)'
-        name_match = re.search(name_pattern, markdown_data)
+        name_match = re.search(r'## ([A-Za-z\s]+)', markdown_data)
         if name_match:
             full_name = name_match.group(1).strip()
             athlete_name = full_name.split()[0]
@@ -174,13 +164,13 @@ Requirement - Craft a story in the third person to include:
 
 1. **Introduction:** Start by talking about the date and location of their first ever parkrun, with a creative reason for them first getting involved.
 
-2. **Key Stats & Evolving Affinities:** Highlight key stats (total runs, best time so far), and mention a few locations they have visited.  Do they have a favorite course, or did their preferences change over time?
+2. **Key Stats & Evolving Affinities:** Highlight key stats (total runs, best time so far), and mention a few locations they have visited. Do they have a favorite course, or did their preferences change over time?
 
-3. **Milestones and Memories:**  Mention if they have achieved any milestone clubs and include anecdotes about highs and lows, particularly when they hit PBs.
+3. **Milestones and Memories:** Mention if they have achieved any milestone clubs and include anecdotes about highs and lows, particularly when they hit PBs.
 
 Run Number is only interesting if it is 1, signifying the runner participated in a debut event at that course. 
 
-4. **Celebration and Conclusion:**  Conclude by celebrating their achievements, regardless of their best or average times.  Focus on the journey, the community, and the personal satisfaction of participating.  Avoid cheesy clichés, but acknowledge their dedication.
+4. **Celebration and Conclusion:** Conclude by celebrating their achievements, regardless of their best or average times. Focus on the journey, the community, and the personal satisfaction of participating. Avoid cheesy clichés, but acknowledge their dedication.
 
         {markdown_data}"""
         response = model.generate_content(prompt)
@@ -193,8 +183,8 @@ Run Number is only interesting if it is 1, signifying the runner participated in
             'content': story_content,
             'url_hash': url_hash,
             'athlete_name': athlete_name,
-            'markdown_data': markdown_data,  # Store the markdown data
-            'last_fetched': current_time,    # Store fetch timestamp
+            'markdown_data': markdown_data,
+            'last_fetched': current_time,
             'created_at': {'.sv': 'timestamp'}
         }
 
@@ -207,22 +197,20 @@ Run Number is only interesting if it is 1, signifying the runner participated in
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
-        return render_template('index.html', error=f"Error: {str(e)}"), 500
+        return render_template('index.html', error=str(e)), 500
 
 @app.route('/social-card/<url_hash>.png')
 def generate_social_card(url_hash):
     try:
-        # Get all stories and filter by url_hash
         stories = ref.get()
         if not stories:
             return "Story not found", 404
 
         # Find the story with matching url_hash
-        matching_story = None
-        for story_id, story_data in stories.items():
-            if story_data.get('url_hash') == url_hash:
-                matching_story = story_data
-                break
+        matching_story = next(
+            (story_data for _, story_data in stories.items() 
+             if story_data.get('url_hash') == url_hash), None
+        )
 
         if not matching_story:
             return "Story not found", 404
@@ -241,21 +229,17 @@ def generate_social_card(url_hash):
         logger.error(f"Error generating social card: {str(e)}")
         return "Error generating social card", 500
 
-
 def create_social_card(story_text, athlete_id):
     """Create a social media card image with the story preview."""
-    # Create a new image with a dark background
     width = 1200
     height = 630
     img = Image.new('RGB', (width, height), color='#212529')
     draw = ImageDraw.Draw(img)
 
-    # Try different font paths for Noto fonts
     try:
         font_title = ImageFont.truetype("/nix/store/*/share/fonts/noto/NotoSans-Bold.ttf", 48)
         font_text = ImageFont.truetype("/nix/store/*/share/fonts/noto/NotoSans-Regular.ttf", 32)
     except IOError:
-        # Fallback to default font if custom font loading fails
         logger.warning("Failed to load Noto fonts, falling back to default font")
         font_title = ImageFont.load_default()
         font_text = ImageFont.load_default()
@@ -281,6 +265,7 @@ def create_social_card(story_text, athlete_id):
     img_io.seek(0)
     return img_io
 
+# Error handlers
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('index.html', error="Page not found"), 404
