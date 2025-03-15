@@ -46,7 +46,7 @@ ref = db.reference('stories')
 
 # Configure Gemini API
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel('gemini-1.5-pro')
 
 # Configure Firecrawl
 firecrawl = FirecrawlApp(api_key=os.getenv('FIRECRAWL_API_KEY'))
