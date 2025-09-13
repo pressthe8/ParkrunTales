@@ -219,6 +219,17 @@ Run Number is only interesting if it is 1, signifying the runner participated in
         }
         link_ref = db.collection('links').document(url_hash)
         link_ref.set(link_data)
+        
+        # Update athlete metadata for future analytics and tracking
+        # Future collections: users/{userId}/favorites/{url_hash}, analytics/storyViews/{url_hash}/daily/{YYYYMMDD}
+        athlete_metadata = {
+            'latest_story_hash': url_hash,
+            'last_fetched': current_time,
+            'total_stories': firestore.Increment(1),
+            'updated_at': SERVER_TIMESTAMP
+        }
+        athlete_meta_ref = db.collection('athletes').document(athlete_id)
+        athlete_meta_ref.set(athlete_metadata, merge=True)
 
         total_duration = time.time() - start_time
         logger.info(f"✨ Total story generation completed in {total_duration:.2f} seconds")
