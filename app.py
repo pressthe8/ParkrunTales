@@ -6,7 +6,10 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from firecrawl import FirecrawlApp
 import firebase_admin
-from firebase_admin import credentials, db
+from firebase_admin import credentials, firestore
+from firebase_admin.firestore import SERVER_TIMESTAMP, Query
+import json
+from datetime import datetime, timedelta
 import secrets
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
@@ -22,20 +25,29 @@ load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "default-secret-key")
+# Require secret key - no fallback for security
+if not os.environ.get("FLASK_SECRET_KEY"):
+    raise ValueError("FLASK_SECRET_KEY environment variable is required")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
 # Ensure static/images directory exists
 static_images_dir = Path('static/images')
 static_images_dir.mkdir(parents=True, exist_ok=True)
 
 # Initialize Firebase
-cred = credentials.Certificate(eval(os.environ.get('FIREBASE_CREDENTIALS')))
-firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://parkrun-story-default-rtdb.europe-west1.firebasedatabase.app/'
-})
+firebase_creds = os.environ.get('FIREBASE_CREDENTIALS')
+if not firebase_creds:
+    raise ValueError("FIREBASE_CREDENTIALS environment variable is required")
 
-# Get a reference to the database
-ref = db.reference('stories')
+try:
+    cred_dict = json.loads(firebase_creds)
+    cred = credentials.Certificate(cred_dict)
+    firebase_admin.initialize_app(cred)
+except json.JSONDecodeError:
+    raise ValueError("Invalid JSON in FIREBASE_CREDENTIALS")
+
+# Get Firestore client
+db = firestore.client()
 
 # Configure Gemini API
 genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
@@ -55,26 +67,32 @@ def index():
 @app.route('/story/<url_hash>')
 def view_story(url_hash):
     try:
-        stories = ref.get()
-        if not stories:
-            logger.debug("No stories found in database")
+        # Look up story via links collection for O(1) access
+        link_ref = db.collection('links').document(url_hash)
+        link_doc = link_ref.get()
+        
+        if not link_doc.exists:
+            logger.debug(f"No link found with url_hash: {url_hash}")
             return render_template('index.html', error="Story not found"), 404
-
-        # Find the story with matching url_hash
-        matching_story = next(
-            (story_data for _, story_data in stories.items() 
-             if story_data.get('url_hash') == url_hash), None
-        )
-
-        if not matching_story:
-            logger.debug(f"No story found with url_hash: {url_hash}")
+        
+        link_data = link_doc.to_dict()
+        athlete_id = link_data['athlete_id']
+        
+        # Get the actual story document
+        story_ref = db.collection('athletes').document(athlete_id).collection('stories').document(url_hash)
+        story_doc = story_ref.get()
+        
+        if not story_doc.exists:
+            logger.debug(f"Story document not found for url_hash: {url_hash}")
             return render_template('index.html', error="Story not found"), 404
-
+            
+        story_data = story_doc.to_dict()
+        
         return render_template(
             'story.html',
-            story=matching_story['content'],
+            story=story_data['content'],
             url_hash=url_hash,
-            athlete_name=matching_story.get('athlete_name', 'Athlete')
+            athlete_name=story_data.get('athlete_name', 'Athlete')
         )
 
     except Exception as e:
@@ -98,18 +116,22 @@ def generate_story():
         numeric_id = athlete_id.lstrip('A')
 
         # Check if we have recent data for this athlete
-        stories = ref.get()
-        current_time = int(time.time())
-        CACHE_DURATION = 7 * 24 * 60 * 60  # 7 days in seconds
+        current_time = datetime.now()
+        CACHE_DURATION = timedelta(days=7)
 
-        # Find recent story from cache
-        recent_story = next(
-            (story_data for _, story_data in stories.items() 
-             if story_data.get('athlete_id') == athlete_id 
-             and story_data.get('markdown_data')
-             and story_data.get('last_fetched')
-             and (current_time - story_data['last_fetched']) < CACHE_DURATION
-            ), None) if stories else None
+        # Query athlete's stories ordered by last_fetched to find most recent
+        athlete_stories_ref = db.collection('athletes').document(athlete_id).collection('stories')
+        recent_stories = athlete_stories_ref.order_by('last_fetched', direction=Query.DESCENDING).limit(1).get()
+        
+        recent_story = None
+        if recent_stories:
+            story_doc = recent_stories[0]
+            story_data = story_doc.to_dict()
+            last_fetched = story_data.get('last_fetched')
+            
+            # Check if the story is still within cache duration
+            if last_fetched and (current_time - last_fetched) < CACHE_DURATION:
+                recent_story = story_data
 
         if recent_story:
             markdown_data = recent_story['markdown_data']
@@ -171,6 +193,8 @@ Run Number is only interesting if it is 1, signifying the runner participated in
 
         # Create and save the story with additional fields
         url_hash = generate_url_hash()
+        expires_at = current_time + timedelta(days=7)
+        
         story_data = {
             'athlete_id': athlete_id,
             'content': story_content,
@@ -178,10 +202,22 @@ Run Number is only interesting if it is 1, signifying the runner participated in
             'athlete_name': athlete_name,
             'markdown_data': markdown_data,
             'last_fetched': current_time,
-            'created_at': {'.sv': 'timestamp'}
+            'created_at': SERVER_TIMESTAMP,
+            'expires_at': expires_at
         }
 
-        ref.push(story_data)
+        # Save story to athletes/{athleteId}/stories/{url_hash}
+        story_ref = db.collection('athletes').document(athlete_id).collection('stories').document(url_hash)
+        story_ref.set(story_data)
+        
+        # Create link document for fast lookup
+        link_data = {
+            'athlete_id': athlete_id,
+            'created_at': SERVER_TIMESTAMP,
+            'expires_at': expires_at
+        }
+        link_ref = db.collection('links').document(url_hash)
+        link_ref.set(link_data)
 
         total_duration = time.time() - start_time
         logger.info(f"✨ Total story generation completed in {total_duration:.2f} seconds")
@@ -195,21 +231,27 @@ Run Number is only interesting if it is 1, signifying the runner participated in
 @app.route('/social-card/<url_hash>.png')
 def generate_social_card(url_hash):
     try:
-        stories = ref.get()
-        if not stories:
+        # Look up story via links collection for O(1) access
+        link_ref = db.collection('links').document(url_hash)
+        link_doc = link_ref.get()
+        
+        if not link_doc.exists:
             return "Story not found", 404
-
-        # Find the story with matching url_hash
-        matching_story = next(
-            (story_data for _, story_data in stories.items() 
-             if story_data.get('url_hash') == url_hash), None
-        )
-
-        if not matching_story:
+        
+        link_data = link_doc.to_dict()
+        athlete_id = link_data['athlete_id']
+        
+        # Get the actual story document
+        story_ref = db.collection('athletes').document(athlete_id).collection('stories').document(url_hash)
+        story_doc = story_ref.get()
+        
+        if not story_doc.exists:
             return "Story not found", 404
+            
+        story_data = story_doc.to_dict()
 
         # Generate the social card image
-        img_io = create_social_card(matching_story['content'], matching_story['athlete_id'])
+        img_io = create_social_card(story_data['content'], story_data['athlete_id'])
 
         return send_file(
             img_io,
