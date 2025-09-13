@@ -7,9 +7,10 @@ import google.generativeai as genai
 from firecrawl import FirecrawlApp
 import firebase_admin
 from firebase_admin import credentials, firestore
-from firebase_admin.firestore import SERVER_TIMESTAMP, Query
+from firebase_admin.firestore import SERVER_TIMESTAMP
+from google.cloud import firestore as gcf
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
@@ -116,12 +117,12 @@ def generate_story():
         numeric_id = athlete_id.lstrip('A')
 
         # Check if we have recent data for this athlete
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         CACHE_DURATION = timedelta(days=7)
 
         # Query athlete's stories ordered by last_fetched to find most recent
         athlete_stories_ref = db.collection('athletes').document(athlete_id).collection('stories')
-        recent_stories = athlete_stories_ref.order_by('last_fetched', direction=Query.DESCENDING).limit(1).get()
+        recent_stories = athlete_stories_ref.order_by('last_fetched', direction=gcf.Query.DESCENDING).limit(1).get()
         
         recent_story = None
         if recent_stories:
